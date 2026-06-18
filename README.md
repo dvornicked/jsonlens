@@ -20,6 +20,10 @@ The expensive work never touches the DOM or the main thread:
 
 ## Architecture
 
+Deep dive: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (also in Russian:
+[docs/ARCHITECTURE.ru.md](docs/ARCHITECTURE.ru.md)). Engine benchmarks:
+**[bench/](bench/README.md)**.
+
 ```
 content.tsx  → detects a JSON document, replaces the page, mounts the viewer
   viewer/    → Preact UI: toolbar, search, virtualized tree (engineClient ⇄ worker)

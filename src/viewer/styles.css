@@ -158,11 +158,13 @@
 
 .jl-twisty {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
-  line-height: 14px;
-  text-align: center;
-  font: inherit;
+  font-size: 10px;
+  line-height: 1;
   color: var(--jl-muted);
   background: transparent;
   border: none;

@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "bench": "node bench/bench.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

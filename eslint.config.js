@@ -27,7 +27,7 @@ export default defineConfig([
   },
   {
     // Node-side tooling and e2e specs run outside the browser.
-    files: ['e2e/**/*.ts', '*.config.{ts,js}'],
+    files: ['e2e/**/*.ts', 'bench/**/*.ts', '*.config.{ts,js}'],
     languageOptions: {
       globals: { ...globals.node },
     },
