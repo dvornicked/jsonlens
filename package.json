@@ -1,0 +1,45 @@
+{
+  "name": "jsonlens",
+  "version": "0.1.0",
+  "description": "Fast JSON viewer browser extension for huge payloads (tens of MB)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
+    "@preact/preset-vite": "^2.9.0",
+    "@types/chrome": "^0.0.270",
+    "@vitest/coverage-v8": "^2.1.9",
+    "esbuild": "^0.21.5",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.61.1",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "preact": "^10.24.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
