@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Fast JSON viewer browser extension for huge payloads (tens of MB)",
   "type": "module",
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
