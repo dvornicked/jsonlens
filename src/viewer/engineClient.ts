@@ -89,4 +89,8 @@ export class EngineClient {
     const r = await this.send({ t: 'copy', node, what });
     return (r as Extract<Res, { t: 'copy' }>).text;
   }
+  async serialize(pretty: boolean): Promise<string> {
+    const r = await this.send({ t: 'serialize', pretty });
+    return (r as Extract<Res, { t: 'serialize' }>).text;
+  }
 }

@@ -300,6 +300,15 @@ export class TsEngine implements Engine {
     }
     return out.startsWith('.') ? out.slice(1) : out;
   }
+
+  // ---- export ----------------------------------------------------------
+
+  serialize(pretty: boolean): string {
+    // Re-serializes the parsed value, so it reflects JS semantics (duplicate
+    // keys collapsed, number spellings normalized) rather than the source bytes
+    // — the viewer offers an "original" export for byte-exact output.
+    return JSON.stringify(this.valueRef[0], null, pretty ? 2 : 0);
+  }
 }
 
 // ---- helpers -----------------------------------------------------------

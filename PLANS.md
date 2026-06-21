@@ -6,7 +6,7 @@
 - Worker-based engine; preorder struct-of-arrays model; Fenwick-backed
   O(log n) collapse/expand/scroll.
 - Features: tree view, search (keys + optional values, next/prev, auto-reveal),
-  copy value / JS path / JSONPath, expand/collapse all + to-depth, Tree ↔ Raw.
+  copy value / JS path / JSONPath, expand/collapse all + to-depth.
 - Tooling: ESLint (flat) + Prettier + EditorConfig; Vitest unit tests +
   Playwright E2E (real Chrome, extension loaded).
 - `pnpm typecheck` / `lint` / `test` / `e2e` / `build` all green.
@@ -29,10 +29,20 @@
 - Pre-build a lowercased value/key index (or incremental/cancelable scan with
   progress) for sub-100ms search.
 
-### Phase 4 — Raw mode polish
+### Phase 4 — Export & save
 
-- Separate prettify / minify toggle (needs re-serialize via worker).
-- Virtualize Raw mode (a single <pre> of tens of MB is heavy).
+Raw view was removed (no value, and an un-virtualized multi-MB `<pre>` froze the
+tab on switch). Replaced that surface with export + persistence:
+
+- ✅ **Export** the current document — done. Toolbar **Export ▾** menu: download
+  as `.json` (pretty / minified — both re-serialized off-thread via the worker's
+  `serialize` op — or the byte-exact original from the source `text`) and copy
+  the whole document to the clipboard. `Blob` + `<a download>`, no new permission.
+- **Save / stash JSON** to temporary storage so a document can be reopened. The
+  extension already holds the `storage` permission. Options to weigh:
+  `chrome.storage.session` (in-memory, cleared when the browser closes — truly
+  "temporary"), IndexedDB (large docs, survives restart), or a tmp blob URL.
+  Tens-of-MB payloads rule out `chrome.storage.local` without `unlimitedStorage`.
 
 ### Phase 5 — refactors surfaced by /simplify + /code-review
 

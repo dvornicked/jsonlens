@@ -82,11 +82,6 @@
   opacity: 0.4;
   cursor: default;
 }
-.jl-modes button.is-on {
-  background: var(--jl-accent);
-  border-color: var(--jl-accent);
-  color: #fff;
-}
 .jl-stat {
   color: var(--jl-muted);
   font-size: 12px;
@@ -97,6 +92,44 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---- export menu ---- */
+.jl-export {
+  position: relative;
+}
+.jl-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--jl-bg-soft);
+  border: 1px solid var(--jl-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.jl-menu button {
+  font: inherit;
+  text-align: left;
+  color: var(--jl-fg);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.jl-menu button:hover {
+  background: #3a3a46;
+}
+.jl-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--jl-border);
 }
 .jl-search input[type='text'],
 .jl-search input:not([type]) {
@@ -225,16 +258,6 @@
 .jl-actions button:hover {
   color: var(--jl-fg);
   background: #3a3a46;
-}
-
-/* ---- raw ---- */
-.jl-raw {
-  flex: 1 1 auto;
-  overflow: auto;
-  margin: 0;
-  padding: 12px 16px;
-  white-space: pre;
-  tab-size: 2;
 }
 
 /* ---- toast ---- */

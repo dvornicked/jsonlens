@@ -55,5 +55,8 @@ function handle(msg: Req, reply: (r: Res) => void): void {
       reply({ id: msg.id, t: 'copy', text });
       break;
     }
+    case 'serialize':
+      reply({ id: msg.id, t: 'serialize', text: engine.serialize(msg.pretty) });
+      break;
   }
 }

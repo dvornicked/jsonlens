@@ -101,4 +101,7 @@ export interface Engine {
 
   /** Dotted/bracketed access path to a node, in JS or JSONPath flavor. */
   pathOf(id: number, flavor: 'js' | 'jsonpath'): string;
+
+  /** Re-serialize the whole document; pretty = 2-space indent, else minified. */
+  serialize(pretty: boolean): string;
 }

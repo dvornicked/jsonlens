@@ -48,7 +48,8 @@ memory) without the viewer changing. Phase 2.
   navigation and auto-reveal.
 - **Copy** value, JS access path (`a.b[0]`), or JSONPath (`$['a']['b'][0]`) per
   node.
-- **Raw** mode toggle.
+- **Export** the whole document — download as `.json` (pretty, minified, or the
+  byte-exact original) or copy it to the clipboard.
 
 ## Develop
 
