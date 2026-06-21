@@ -163,3 +163,28 @@ describe('pathOf + valueOf', () => {
     expect(e.valueOf(userId)).toEqual(DOC.user);
   });
 });
+
+describe('serialize', () => {
+  it('minifies the whole document', () => {
+    const e = parse({ a: 1, b: [true, null] });
+    expect(e.serialize(false)).toBe('{"a":1,"b":[true,null]}');
+  });
+
+  it('pretty-prints with 2-space indent', () => {
+    const e = parse({ a: 1, b: [2] });
+    expect(e.serialize(true)).toBe('{\n  "a": 1,\n  "b": [\n    2\n  ]\n}');
+  });
+
+  it('serializes a primitive root', () => {
+    expect(parse('hi').serialize(false)).toBe('"hi"');
+    expect(parse(42).serialize(true)).toBe('42');
+  });
+
+  it('reflects JS semantics, not source bytes — this is why "original" export exists', () => {
+    // Feed raw text (not the canonicalizing helper) so the source has a duplicate
+    // key and non-normalized numbers, which re-serialization collapses/normalizes.
+    const e = new TsEngine();
+    e.parse('{"a":1,"a":2,"n":1e3,"m":0.50}');
+    expect(e.serialize(false)).toBe('{"a":2,"n":1000,"m":0.5}');
+  });
+});

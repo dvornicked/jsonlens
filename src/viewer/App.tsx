@@ -19,7 +19,6 @@ export function App({ text, onParseError }: Props) {
   const client = useMemo(() => new EngineClient(), []);
   const [status, setStatus] = useState<Status>({ phase: 'parsing' });
   const [visibleCount, setVisibleCount] = useState(0);
-  const [mode, setMode] = useState<'tree' | 'raw'>('tree');
 
   const [query, setQuery] = useState('');
   const [valuesToo, setValuesToo] = useState(true);
@@ -28,8 +27,11 @@ export function App({ text, onParseError }: Props) {
   const [scrollToRow, setScrollToRow] = useState<number | null>(null);
   const [scrollTick, setScrollTick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const searchSeq = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const exportBtnRef = useRef<HTMLButtonElement>(null);
 
   // Parse once on mount.
   useEffect(() => {
@@ -70,6 +72,26 @@ export function App({ text, onParseError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, valuesToo, status.phase]);
 
+  // While the export menu is open, dismiss it on Escape or an outside click.
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setExportOpen(false);
+        exportBtnRef.current?.focus();
+      }
+    };
+    const onDown = (e: MouseEvent) => {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onDown);
+    };
+  }, [exportOpen]);
+
   const matches = useMemo(() => new Set(hits.map((h) => h.id)), [hits]);
   const activeHit = hits[hitIdx]?.id ?? null;
 
@@ -108,6 +130,38 @@ export function App({ text, onParseError }: Props) {
     try {
       await navigator.clipboard.writeText(text);
       showToast(what === 'value' ? 'Value copied' : `Path copied: ${truncate(text, 60)}`);
+    } catch {
+      showToast('Copy failed (clipboard blocked)');
+    }
+  }
+
+  // Re-serialize off-thread (worker holds the parsed value) for the pretty /
+  // minified flavors; "original" downloads the exact source bytes untouched.
+  async function downloadDoc(flavor: 'pretty' | 'min' | 'original') {
+    setExportOpen(false);
+    try {
+      let content: string;
+      if (flavor === 'original') {
+        content = text;
+      } else {
+        // Re-serialize can take a beat on tens of MB — acknowledge the click.
+        showToast('Preparing export…');
+        content = await client.serialize(flavor === 'pretty');
+      }
+      const name = downloadName(flavor === 'min');
+      triggerDownload(content, name);
+      showToast(`Downloaded ${name}`);
+    } catch {
+      showToast('Export failed');
+    }
+  }
+
+  async function copyAll() {
+    setExportOpen(false);
+    try {
+      showToast('Preparing export…');
+      await navigator.clipboard.writeText(await client.serialize(true));
+      showToast('Document copied');
     } catch {
       showToast('Copy failed (clipboard blocked)');
     }
@@ -172,31 +226,39 @@ export function App({ text, onParseError }: Props) {
 
         <button onClick={() => onToggleAll(false)}>Expand all</button>
         <button onClick={() => onToggleAll(true)}>Collapse all</button>
-        <div class="jl-modes">
-          <button class={mode === 'tree' ? 'is-on' : ''} onClick={() => setMode('tree')}>
-            Tree
+
+        <div class="jl-export" ref={exportRef}>
+          <button
+            ref={exportBtnRef}
+            aria-expanded={exportOpen}
+            onClick={() => setExportOpen((o) => !o)}
+          >
+            Export ▾
           </button>
-          <button class={mode === 'raw' ? 'is-on' : ''} onClick={() => setMode('raw')}>
-            Raw
-          </button>
+          {exportOpen && (
+            <div class="jl-menu">
+              <button onClick={() => downloadDoc('pretty')}>Download — pretty</button>
+              <button onClick={() => downloadDoc('min')}>Download — minified</button>
+              <button onClick={() => downloadDoc('original')}>Download — original</button>
+              <div class="jl-menu-sep" />
+              <button onClick={copyAll}>Copy all to clipboard</button>
+            </div>
+          )}
         </div>
+
         <span class="jl-stat">{status.nodeCount.toLocaleString()} nodes</span>
       </header>
 
-      {mode === 'tree' ? (
-        <VirtualTree
-          client={client}
-          visibleCount={visibleCount}
-          scrollToRow={scrollToRow}
-          scrollTick={scrollTick}
-          activeHit={activeHit}
-          matches={matches}
-          onToggle={onToggle}
-          onCopy={onCopy}
-        />
-      ) : (
-        <pre class="jl-raw">{text}</pre>
-      )}
+      <VirtualTree
+        client={client}
+        visibleCount={visibleCount}
+        scrollToRow={scrollToRow}
+        scrollTick={scrollTick}
+        activeHit={activeHit}
+        matches={matches}
+        onToggle={onToggle}
+        onCopy={onCopy}
+      />
 
       {toast && <div class="jl-toast">{toast}</div>}
     </div>
@@ -211,4 +273,24 @@ function fmtBytes(n: number): string {
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+/** Download filename derived from the document URL, e.g. `data.json` → `data.min.json`. */
+function downloadName(minified: boolean): string {
+  const seg = location.pathname.split('/').filter(Boolean).pop() ?? '';
+  const base = seg.replace(/\.json$/i, '') || 'document';
+  return minified ? `${base}.min.json` : `${base}.json`;
+}
+
+/** Save a string as a file via a transient blob URL + `<a download>`. */
+function triggerDownload(content: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Keep the URL alive until the download has certainly started, then free it.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

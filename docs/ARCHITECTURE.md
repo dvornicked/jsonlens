@@ -61,7 +61,7 @@ drop in later without touching the viewer.
 │   viewer (App)    │   Talks to the worker via EngineClient (promises over
 │  viewer/*.tsx     │   postMessage), renders only viewport rows.
 └─────────┬─────────┘
-          │ messages (parse / getRows / toggle / search / reveal / copy)
+          │ messages (parse / getRows / toggle / search / reveal / copy / serialize)
           ▼
 ┌───────────────────┐   runs the Engine off the main thread.
 │   Web Worker      │
@@ -236,17 +236,20 @@ per-row measurement.
 - **Copy** — `valueOf(id)` returns the live JS sub-value (serialized for copy);
   `pathOf(id, flavor)` walks `parent`/`keys` to build a JS (`a.b[0]`) or JSONPath
   (`$['a']['b'][0]`) string, with proper escaping for keys that need it.
+- **Export** — `serialize(pretty)` re-stringifies the whole document **in the
+  worker** (so a multi-MB serialize never blocks the UI) for the pretty/minified
+  downloads and the copy-all action; the "original" download streams the source
+  bytes straight from the viewer's `text`, byte-for-byte.
 - **Collapse/expand all & to-depth** — whole-tree visibility recomputed in
   `O(n)` and the Fenwick rebuilt with `initFrom`.
-- **Tree ↔ Raw** — Raw shows the original document text.
 
 ---
 
 ## 7. The engine boundary (and Rust/WASM)
 
 `Engine` (`src/engine/types.ts`) is deliberately narrow and zero-copy-friendly:
-`getRows`, `toggle`, `search`, `reveal`, `pathOf`, … — **indices and ids only**,
-never object trees. `TsEngine` is one implementation; a `WasmEngine` (Rust +
+`getRows`, `toggle`, `search`, `reveal`, `pathOf`, `serialize`, … — **indices,
+ids, and whole-document strings only**, never object trees. `TsEngine` is one implementation; a `WasmEngine` (Rust +
 `serde_json`/`simd-json` parsing straight into linear memory) can implement the
 same interface and be swapped in the worker with **no viewer changes**. That's
 the whole point of the boundary, and why the benchmark harness

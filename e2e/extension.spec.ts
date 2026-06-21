@@ -1,4 +1,5 @@
 import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -88,12 +89,29 @@ test('copy JS path writes the path to the clipboard', async () => {
   await page.close();
 });
 
-test('switches to raw mode and back', async () => {
+test('export downloads the document as a minified .json file', async () => {
   const page = await openJson(SAMPLE);
-  await page.click('.jl-modes button:has-text("Raw")');
-  await expect(page.locator('pre.jl-raw')).toContainText('"alpha"');
-  await page.click('.jl-modes button:has-text("Tree")');
-  await expect(page.locator('.jl-scroller')).toBeVisible();
+  await page.click('.jl-export > button'); // open the Export menu
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.click('.jl-menu button:has-text("minified")'),
+  ]);
+  expect(download.suggestedFilename()).toBe('data.min.json');
+  const file = await download.path();
+  expect(await readFile(file, 'utf8')).toBe(JSON.stringify(SAMPLE));
+  await page.close();
+});
+
+test('export copies the whole document to the clipboard', async () => {
+  const page = await openJson(SAMPLE);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+    origin: 'https://jsonlens.test',
+  });
+  await page.click('.jl-export > button');
+  await page.click('.jl-menu button:has-text("Copy all")');
+  await expect(page.locator('.jl-toast')).toContainText('copied');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip).toBe(JSON.stringify(SAMPLE, null, 2)); // copy-all uses the pretty form
   await page.close();
 });
 
