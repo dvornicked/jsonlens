@@ -24,7 +24,9 @@ const DOC = {
 describe('parse + model', () => {
   it('counts every node once in preorder', () => {
     const e = parse(DOC);
-    expect(e.visibleCount()).toBe(15);
+    // 15 nodes + 6 expanded containers (root, user, tags, items, items[0], items[1])
+    // each contribute a closing-bracket row → 21 display rows.
+    expect(e.visibleCount()).toBe(21);
     expect(rows(e)[0]).toEqual({ depth: 0, key: null, kind: Kind.Object });
     expect(rows(e)[1]).toEqual({ depth: 1, key: 'user', kind: Kind.Object });
   });
@@ -62,7 +64,8 @@ describe('collapse / expand', () => {
     const e = parse(DOC);
     const userId = e.search('user', false)[0]!.id;
     const before = e.visibleCount();
-    expect(e.toggle(userId, true)).toBe(before - 6); // user has 6 descendants
+    // -6 descendant rows, -1 closer for `tags`, -1 closer for `user` itself (now collapsed).
+    expect(e.toggle(userId, true)).toBe(before - 8);
     expect(e.rowOf(e.search('tags', false)[0]!.id)).toBe(-1); // hidden
   });
 
@@ -70,7 +73,7 @@ describe('collapse / expand', () => {
     const e = parse(DOC);
     const userId = e.search('user', false)[0]!.id;
     e.toggle(userId, true);
-    expect(e.toggle(userId, false)).toBe(15);
+    expect(e.toggle(userId, false)).toBe(21);
   });
 
   it('toggle is a no-op on an empty container', () => {
@@ -84,13 +87,97 @@ describe('collapse / expand', () => {
   it('collapse all leaves only the root; expand all restores everything', () => {
     const e = parse(DOC);
     expect(e.toggleAll(true)).toBe(1);
-    expect(e.toggleAll(false)).toBe(15);
+    expect(e.toggleAll(false)).toBe(21);
   });
 
   it('collapseToDepth(1) shows the root and its direct members', () => {
     const e = parse(DOC);
-    expect(e.collapseToDepth(1)).toBe(5); // root + 4 members
+    expect(e.collapseToDepth(1)).toBe(6); // root + 4 members + root's closing row
     expect(rows(e).every((r) => r.depth <= 1)).toBe(true);
+  });
+});
+
+describe('closing-bracket rows', () => {
+  const SMALL = { a: [1, 2], b: 3 };
+
+  /** Compact display row: indent depth, kind, and whether it's a closing bracket. */
+  function disp(e: TsEngine) {
+    return e
+      .getRows(0, e.visibleCount())
+      .map((r) => ({ depth: r.depth, kind: r.kind, close: !!r.close }));
+  }
+
+  it('emits one closing row per expanded container, after its last child', () => {
+    const e = parse(SMALL);
+    expect(disp(e)).toEqual([
+      { depth: 0, kind: Kind.Object, close: false }, // {
+      { depth: 1, kind: Kind.Array, close: false }, //   a: [
+      { depth: 2, kind: Kind.Number, close: false }, //     1
+      { depth: 2, kind: Kind.Number, close: false }, //     2
+      { depth: 1, kind: Kind.Array, close: true }, //   ]
+      { depth: 1, kind: Kind.Number, close: false }, //   b: 3
+      { depth: 0, kind: Kind.Object, close: true }, // }
+    ]);
+  });
+
+  it('counts closing rows in the visible total', () => {
+    const e = parse(SMALL);
+    expect(e.visibleCount()).toBe(7); // 5 nodes + 2 expanded containers
+  });
+
+  it('a collapsed container contributes neither children nor a closing row', () => {
+    const e = parse(SMALL);
+    e.toggle(e.search('a', false)[0]!.id, true);
+    expect(e.visibleCount()).toBe(4);
+    expect(disp(e)).toEqual([
+      { depth: 0, kind: Kind.Object, close: false }, // {
+      { depth: 1, kind: Kind.Array, close: false }, //   a: [ … ]  (collapsed, no closer)
+      { depth: 1, kind: Kind.Number, close: false }, //   b: 3
+      { depth: 0, kind: Kind.Object, close: true }, // }
+    ]);
+  });
+
+  it('a closing row carries its container node id', () => {
+    const e = parse(SMALL);
+    const aId = e.search('a', false)[0]!.id;
+    const closeRow = e.getRows(0, e.visibleCount()).find((r) => r.close && r.kind === Kind.Array)!;
+    expect(closeRow.id).toBe(aId);
+    expect(closeRow.key).toBeNull();
+  });
+
+  it('a windowed getRows starting mid-document includes the right closers', () => {
+    const e = parse(SMALL);
+    // Display index 4 is `a`'s closing row; take 3 rows from there.
+    const win = e.getRows(4, 3).map((r) => ({ depth: r.depth, close: !!r.close, key: r.key }));
+    expect(win).toEqual([
+      { depth: 1, close: true, key: null }, // ]  (a close)
+      { depth: 1, close: false, key: 'b' }, // b: 3
+      { depth: 0, close: true, key: null }, // }  (root close)
+    ]);
+  });
+
+  it('rowOf points at a node opener with closing rows counted in', () => {
+    const e = parse(SMALL);
+    expect(e.rowOf(e.search('b', false)[0]!.id)).toBe(5);
+  });
+
+  it('stacks several closing rows when containers end together', () => {
+    const e = parse({ a: { b: [1] } });
+    expect(disp(e)).toEqual([
+      { depth: 0, kind: Kind.Object, close: false }, // {
+      { depth: 1, kind: Kind.Object, close: false }, //   a: {
+      { depth: 2, kind: Kind.Array, close: false }, //     b: [
+      { depth: 3, kind: Kind.Number, close: false }, //       1
+      { depth: 2, kind: Kind.Array, close: true }, //     ]
+      { depth: 1, kind: Kind.Object, close: true }, //   }
+      { depth: 0, kind: Kind.Object, close: true }, // }
+    ]);
+  });
+
+  it('clamps the window to the rows that exist', () => {
+    const e = parse(SMALL); // 7 display rows
+    expect(e.getRows(5, 99).length).toBe(2); // only b: 3 and the root closer remain
+    expect(e.getRows(7, 5)).toEqual([]); // start past the end
   });
 });
 

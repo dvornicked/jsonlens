@@ -89,29 +89,23 @@ test('copy JS path writes the path to the clipboard', async () => {
   await page.close();
 });
 
-test('export downloads the document as a minified .json file', async () => {
+test('Download saves the document as a pretty .json file', async () => {
   const page = await openJson(SAMPLE);
-  await page.click('.jl-export > button'); // open the Export menu
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.click('.jl-menu button:has-text("minified")'),
+    page.click('.jl-toolbar button:has-text("Download")'),
   ]);
-  expect(download.suggestedFilename()).toBe('data.min.json');
+  expect(download.suggestedFilename()).toBe('data.json');
   const file = await download.path();
-  expect(await readFile(file, 'utf8')).toBe(JSON.stringify(SAMPLE));
+  expect(await readFile(file, 'utf8')).toBe(JSON.stringify(SAMPLE, null, 2));
   await page.close();
 });
 
-test('export copies the whole document to the clipboard', async () => {
+test('renders a closing-bracket row for each expanded container', async () => {
   const page = await openJson(SAMPLE);
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-    origin: 'https://jsonlens.test',
-  });
-  await page.click('.jl-export > button');
-  await page.click('.jl-menu button:has-text("Copy all")');
-  await expect(page.locator('.jl-toast')).toContainText('copied');
-  const clip = await page.evaluate(() => navigator.clipboard.readText());
-  expect(clip).toBe(JSON.stringify(SAMPLE, null, 2)); // copy-all uses the pretty form
+  // The closing line carries the matching `}` / `]` and no key.
+  await expect(page.locator('.jl-row--close').first()).toBeVisible();
+  await expect(page.locator('.jl-row--close', { hasText: '}' }).first()).toBeVisible();
   await page.close();
 });
 

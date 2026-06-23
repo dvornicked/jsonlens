@@ -226,7 +226,19 @@ down) can't request a negative window.
 Fixed row height (`ROW_H`) is what keeps virtualization arithmetic `O(1)` — no
 per-row measurement.
 
----
+### Closing-bracket rows
+
+Each expanded container also renders a closing `}` / `]` on its own line, so the
+display row space is **visible nodes + visible expanded containers**, not just
+nodes. A second Fenwick (`closeFen`, over a `closeWeight` bit per node) counts
+those closing rows; `visibleCount = nodeFen.count + closeFen.count` drives the
+spacer height. `getRows` seeks to a display index by binary-searching the
+opener's display index `DI(X) = visibleRank(X) + closeFen.prefixExclusive(X) −
+depth(X)` (the `− depth` falls out because a visible node's ancestors are all
+still-open containers), then forward-walks a DFS reconstruction that interleaves
+closing rows as containers end. Closing rows carry `close: true` and the
+container's node id; the model stays one-node-per-entry — closers are derived,
+never stored.
 
 ## 6. Features, mapped to the model
 
@@ -236,10 +248,9 @@ per-row measurement.
 - **Copy** — `valueOf(id)` returns the live JS sub-value (serialized for copy);
   `pathOf(id, flavor)` walks `parent`/`keys` to build a JS (`a.b[0]`) or JSONPath
   (`$['a']['b'][0]`) string, with proper escaping for keys that need it.
-- **Export** — `serialize(pretty)` re-stringifies the whole document **in the
-  worker** (so a multi-MB serialize never blocks the UI) for the pretty/minified
-  downloads and the copy-all action; the "original" download streams the source
-  bytes straight from the viewer's `text`, byte-for-byte.
+- **Download** — `serialize(true)` re-stringifies the whole document **in the
+  worker** (so a multi-MB serialize never blocks the UI) and saves it as a
+  pretty-printed `.json` file via a transient blob URL.
 - **Collapse/expand all & to-depth** — whole-tree visibility recomputed in
   `O(n)` and the Fenwick rebuilt with `initFrom`.
 

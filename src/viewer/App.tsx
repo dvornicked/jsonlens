@@ -27,11 +27,8 @@ export function App({ text, onParseError }: Props) {
   const [scrollToRow, setScrollToRow] = useState<number | null>(null);
   const [scrollTick, setScrollTick] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
   const searchSeq = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exportRef = useRef<HTMLDivElement>(null);
-  const exportBtnRef = useRef<HTMLButtonElement>(null);
 
   // Parse once on mount.
   useEffect(() => {
@@ -71,26 +68,6 @@ export function App({ text, onParseError }: Props) {
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, valuesToo, status.phase]);
-
-  // While the export menu is open, dismiss it on Escape or an outside click.
-  useEffect(() => {
-    if (!exportOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setExportOpen(false);
-        exportBtnRef.current?.focus();
-      }
-    };
-    const onDown = (e: MouseEvent) => {
-      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('mousedown', onDown);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('mousedown', onDown);
-    };
-  }, [exportOpen]);
 
   const matches = useMemo(() => new Set(hits.map((h) => h.id)), [hits]);
   const activeHit = hits[hitIdx]?.id ?? null;
@@ -135,35 +112,18 @@ export function App({ text, onParseError }: Props) {
     }
   }
 
-  // Re-serialize off-thread (worker holds the parsed value) for the pretty /
-  // minified flavors; "original" downloads the exact source bytes untouched.
-  async function downloadDoc(flavor: 'pretty' | 'min' | 'original') {
-    setExportOpen(false);
+  // Re-serialize off-thread (the worker holds the parsed value) and save it as a
+  // pretty-printed .json file.
+  async function downloadPretty() {
     try {
-      let content: string;
-      if (flavor === 'original') {
-        content = text;
-      } else {
-        // Re-serialize can take a beat on tens of MB — acknowledge the click.
-        showToast('Preparing export…');
-        content = await client.serialize(flavor === 'pretty');
-      }
-      const name = downloadName(flavor === 'min');
+      // Re-serialize can take a beat on tens of MB — acknowledge the click.
+      showToast('Preparing export…');
+      const content = await client.serialize(true);
+      const name = downloadName();
       triggerDownload(content, name);
       showToast(`Downloaded ${name}`);
     } catch {
       showToast('Export failed');
-    }
-  }
-
-  async function copyAll() {
-    setExportOpen(false);
-    try {
-      showToast('Preparing export…');
-      await navigator.clipboard.writeText(await client.serialize(true));
-      showToast('Document copied');
-    } catch {
-      showToast('Copy failed (clipboard blocked)');
     }
   }
 
@@ -227,24 +187,7 @@ export function App({ text, onParseError }: Props) {
         <button onClick={() => onToggleAll(false)}>Expand all</button>
         <button onClick={() => onToggleAll(true)}>Collapse all</button>
 
-        <div class="jl-export" ref={exportRef}>
-          <button
-            ref={exportBtnRef}
-            aria-expanded={exportOpen}
-            onClick={() => setExportOpen((o) => !o)}
-          >
-            Export ▾
-          </button>
-          {exportOpen && (
-            <div class="jl-menu">
-              <button onClick={() => downloadDoc('pretty')}>Download — pretty</button>
-              <button onClick={() => downloadDoc('min')}>Download — minified</button>
-              <button onClick={() => downloadDoc('original')}>Download — original</button>
-              <div class="jl-menu-sep" />
-              <button onClick={copyAll}>Copy all to clipboard</button>
-            </div>
-          )}
-        </div>
+        <button onClick={downloadPretty}>Download</button>
 
         <span class="jl-stat">{status.nodeCount.toLocaleString()} nodes</span>
       </header>
@@ -275,11 +218,11 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + '…' : s;
 }
 
-/** Download filename derived from the document URL, e.g. `data.json` → `data.min.json`. */
-function downloadName(minified: boolean): string {
+/** Download filename derived from the document URL, e.g. `/foo/data.json` → `data.json`. */
+function downloadName(): string {
   const seg = location.pathname.split('/').filter(Boolean).pop() ?? '';
   const base = seg.replace(/\.json$/i, '') || 'document';
-  return minified ? `${base}.min.json` : `${base}.json`;
+  return `${base}.json`;
 }
 
 /** Save a string as a file via a transient blob URL + `<a download>`. */

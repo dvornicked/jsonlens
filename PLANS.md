@@ -34,10 +34,11 @@
 Raw view was removed (no value, and an un-virtualized multi-MB `<pre>` froze the
 tab on switch). Replaced that surface with export + persistence:
 
-- ✅ **Export** the current document — done. Toolbar **Export ▾** menu: download
-  as `.json` (pretty / minified — both re-serialized off-thread via the worker's
-  `serialize` op — or the byte-exact original from the source `text`) and copy
-  the whole document to the clipboard. `Blob` + `<a download>`, no new permission.
+- ✅ **Export** the current document — done. Toolbar **Download** button saves the
+  document as a pretty-printed `.json`, re-serialized off-thread via the worker's
+  `serialize` op. `Blob` + `<a download>`, no new permission. (Earlier iterations
+  also offered minified / byte-exact-original downloads and copy-all from a
+  dropdown; simplified to a single one-click pretty download.)
 - **Save / stash JSON** to temporary storage so a document can be reopened. The
   extension already holds the `storage` permission. Options to weigh:
   `chrome.storage.session` (in-memory, cleared when the browser closes — truly

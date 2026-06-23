@@ -42,14 +42,13 @@ memory) without the viewer changing. Phase 2.
 
 ## Features
 
-- Tree view with syntax coloring, collapse/expand, expand/collapse all,
-  collapse-to-depth.
+- Tree view with syntax coloring, matching closing brackets on their own line,
+  collapse/expand, expand/collapse all, collapse-to-depth.
 - Incremental **search** over keys (and optionally values) with next/prev
   navigation and auto-reveal.
 - **Copy** value, JS access path (`a.b[0]`), or JSONPath (`$['a']['b'][0]`) per
   node.
-- **Export** the whole document — download as `.json` (pretty, minified, or the
-  byte-exact original) or copy it to the clipboard.
+- **Download** the whole document as a pretty-printed `.json` file.
 
 ## Develop
 
