@@ -39,6 +39,8 @@ export interface Row {
   collapsed: boolean;
   /** True if container has children (i.e. is expandable). */
   expandable: boolean;
+  /** True if this row is a container's closing bracket (`}`/`]`), not a node. */
+  close?: boolean;
 }
 
 export interface ParseOk {

@@ -19,12 +19,16 @@ export class TsEngine implements Engine {
   private collapsed!: Uint8Array;
   /** Whether a node is currently rendered (no collapsed ancestor). */
   private visible!: Uint8Array;
+  /** 1 iff this node currently renders a closing-bracket row (visible, expanded, non-empty container). */
+  private closeWeight!: Uint8Array;
   private keys!: (string | null)[];
   private keyIsIndex!: Uint8Array;
   private preview!: string[];
   /** Reference to the live JS sub-value, for copy/path. */
   private valueRef!: unknown[];
   private fen!: Fenwick;
+  /** Fenwick over closeWeight — closing rows interleaved into the display order. */
+  private closeFen!: Fenwick;
 
   parse(text: string): ParseResult {
     let root: unknown;
@@ -48,7 +52,14 @@ export class TsEngine implements Engine {
     this.fen = new Fenwick(this.n);
     this.fen.initFrom(this.visible);
 
-    return { ok: true, nodeCount: this.n, visibleCount: this.fen.count };
+    // Every non-empty container is expanded, so each gets a closing row.
+    for (let i = 0; i < this.n; i++) {
+      this.closeWeight[i] = isContainerKind(this.kind[i]!) && this.childCount[i]! > 0 ? 1 : 0;
+    }
+    this.closeFen = new Fenwick(this.n);
+    this.closeFen.initFrom(this.closeWeight);
+
+    return { ok: true, nodeCount: this.n, visibleCount: this.displayCount() };
   }
 
   private allocate(n: number): void {
@@ -60,6 +71,7 @@ export class TsEngine implements Engine {
     this.subtreeSize = new Uint32Array(n);
     this.collapsed = new Uint8Array(n);
     this.visible = new Uint8Array(n);
+    this.closeWeight = new Uint8Array(n);
     this.keyIsIndex = new Uint8Array(n);
     this.keys = new Array(n);
     this.preview = new Array(n);
@@ -141,17 +153,85 @@ export class TsEngine implements Engine {
 
   // ---- read side -------------------------------------------------------
 
+  /** Total rows the UI renders: visible nodes plus one closing row per expanded container. */
   visibleCount(): number {
-    return this.fen.count;
+    return this.displayCount();
+  }
+
+  private displayCount(): number {
+    return this.fen.count + this.closeFen.count;
+  }
+
+  /** Whether node `id` renders a closing row (visible, non-empty, expanded container). */
+  private isExpandedContainer(id: number): boolean {
+    return isContainerKind(this.kind[id]!) && this.childCount[id]! > 0 && !this.collapsed[id];
+  }
+
+  /**
+   * Display-row index of a node's opener. A node is preceded by `closeFen` closing
+   * rows for every expanded container that fully closes before it; since the node is
+   * visible all its ancestors are open, so exactly `depth` of those are still pending —
+   * hence the `- depth`.
+   */
+  private displayIndexOf(id: number, visibleRank: number): number {
+    const closersBefore = (id > 0 ? this.closeFen.prefix(id - 1) : 0) - this.depth[id]!;
+    return visibleRank + closersBefore;
+  }
+
+  /** Display index of the opener of the `r`-th visible node. */
+  private diOfRank(r: number): number {
+    return this.displayIndexOf(this.fen.findKth(r), r);
   }
 
   getRows(start: number, count: number): Row[] {
     const out: Row[] = [];
-    const total = this.fen.count;
-    let id = this.fen.findKth(start);
-    for (let r = 0; r < count && start + r < total && id !== -1; r++) {
-      out.push(this.rowAt(id));
+    const total = this.displayCount();
+    if (count <= 0 || start < 0 || start >= total) return out;
+    const limit = Math.min(count, total - start);
+
+    // Seek the visible node whose opener sits at or just before `start`.
+    let lo = 0;
+    let hi = this.fen.count - 1;
+    let r = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.diOfRank(mid) <= start) {
+        r = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    let id = this.fen.findKth(r);
+    let skip = start - this.diOfRank(r);
+    // Open ancestors of the start node, root-first — the closers still pending above it.
+    const stack: number[] = [];
+    for (let a = this.parent[id]!; a !== -1; a = this.parent[a]!) stack.push(a);
+    stack.reverse();
+
+    // Emit honouring the initial skip; stop once the window is full.
+    const push = (row: Row): boolean => {
+      if (skip > 0) {
+        skip--;
+        return false;
+      }
+      out.push(row);
+      return out.length >= limit;
+    };
+
+    while (id !== -1) {
+      // Close every ancestor that ended before this node (deeper-or-equal depth).
+      while (stack.length && this.depth[stack[stack.length - 1]!]! >= this.depth[id]!) {
+        if (push(this.closeRowAt(stack.pop()!))) return out;
+      }
+      if (push(this.rowAt(id))) return out;
+      if (this.isExpandedContainer(id)) stack.push(id);
       id = this.nextVisible(id);
+    }
+    // Past the last visible node: flush the remaining open containers' closers.
+    while (stack.length) {
+      if (push(this.closeRowAt(stack.pop()!))) return out;
     }
     return out;
   }
@@ -180,9 +260,25 @@ export class TsEngine implements Engine {
     };
   }
 
+  /** A container's closing-bracket row — just kind + depth + the container's id. */
+  private closeRowAt(id: number): Row {
+    return {
+      id,
+      depth: this.depth[id]!,
+      kind: this.kind[id]! as Kind,
+      key: null,
+      keyIsIndex: false,
+      preview: '',
+      childCount: this.childCount[id]!,
+      collapsed: false,
+      expandable: false,
+      close: true,
+    };
+  }
+
   rowOf(id: number): number {
     if (id < 0 || id >= this.n || !this.visible[id]) return -1;
-    return this.fen.prefix(id) - 1;
+    return this.displayIndexOf(id, this.fen.prefix(id) - 1);
   }
 
   // ---- collapse / expand ----------------------------------------------
@@ -190,7 +286,20 @@ export class TsEngine implements Engine {
   toggle(id: number, collapse: boolean): number {
     if (isContainerKind(this.kind[id]!) && this.childCount[id]! > 0)
       this.setCollapsed(id, collapse);
-    return this.fen.count;
+    return this.displayCount();
+  }
+
+  /** Closing-row weight a node should have right now (1 iff visible+expanded+non-empty). */
+  private wantsCloser(idx: number): number {
+    return this.visible[idx] && this.isExpandedContainer(idx) ? 1 : 0;
+  }
+
+  /** Point-update a node's closing-row weight in closeFen. */
+  private setCloseWeight(idx: number, val: number): void {
+    if (this.closeWeight[idx] !== val) {
+      this.closeFen.update(idx, val - this.closeWeight[idx]!);
+      this.closeWeight[idx] = val;
+    }
   }
 
   /**
@@ -202,6 +311,8 @@ export class TsEngine implements Engine {
   private setCollapsed(i: number, collapse: boolean): void {
     if (!!this.collapsed[i] === collapse) return;
     this.collapsed[i] = collapse ? 1 : 0;
+    // `i` itself stays visible; its closing row appears only while expanded.
+    this.setCloseWeight(i, this.wantsCloser(i));
     const want = collapse ? 0 : 1;
     const delta = collapse ? -1 : 1;
     const end = i + this.subtreeSize[i]!;
@@ -210,6 +321,7 @@ export class TsEngine implements Engine {
       if (this.visible[j] !== want) {
         this.visible[j] = want;
         this.fen.update(j, delta);
+        this.setCloseWeight(j, this.wantsCloser(j));
       }
       j = this.collapsed[j] ? j + this.subtreeSize[j]! : j + 1;
     }
@@ -221,9 +333,11 @@ export class TsEngine implements Engine {
       const isC = isContainerKind(this.kind[i]!) && this.childCount[i]! > 0;
       this.collapsed[i] = collapse && isC ? 1 : 0;
       this.visible[i] = collapse ? (i === 0 ? 1 : 0) : 1;
+      this.closeWeight[i] = this.wantsCloser(i);
     }
     this.fen.initFrom(this.visible);
-    return this.fen.count;
+    this.closeFen.initFrom(this.closeWeight);
+    return this.displayCount();
   }
 
   collapseToDepth(d: number): number {
@@ -231,9 +345,11 @@ export class TsEngine implements Engine {
       const isC = isContainerKind(this.kind[i]!) && this.childCount[i]! > 0;
       this.collapsed[i] = isC && this.depth[i]! >= d ? 1 : 0;
       this.visible[i] = this.depth[i]! <= d ? 1 : 0;
+      this.closeWeight[i] = this.wantsCloser(i);
     }
     this.fen.initFrom(this.visible);
-    return this.fen.count;
+    this.closeFen.initFrom(this.closeWeight);
+    return this.displayCount();
   }
 
   reveal(id: number): number {

@@ -81,7 +81,7 @@ export function VirtualTree(props: Props) {
       <div class="jl-spacer" style={{ height: visibleCount * ROW_H }}>
         {range.rows.map((row, i) => (
           <RowView
-            key={row.id}
+            key={row.close ? `c${row.id}` : row.id}
             row={row}
             top={(range.start + i) * ROW_H}
             active={props.activeHit === row.id}
@@ -104,6 +104,20 @@ function RowView(props: {
   onCopy: (node: number, what: 'value' | 'js' | 'jsonpath') => void;
 }) {
   const { row } = props;
+
+  // A closing-bracket row: just the matching `}` / `]` at the container's indent.
+  if (row.close) {
+    return (
+      <div
+        class="jl-row jl-row--close"
+        style={{ top: props.top, height: ROW_H, paddingLeft: 8 + row.depth * 14 }}
+      >
+        <span class="jl-twisty jl-twisty--leaf" />
+        <span class={`jl-val ${KIND_CLASS[row.kind]}`}>{row.kind === Kind.Array ? ']' : '}'}</span>
+      </div>
+    );
+  }
+
   const cls = ['jl-row', props.active && 'is-active', props.matched && 'is-match']
     .filter(Boolean)
     .join(' ');
@@ -147,9 +161,11 @@ function RowView(props: {
 
 function summarize(row: Row): string {
   if (row.kind === Kind.Object) {
+    if (row.childCount === 0) return '{}';
     return row.collapsed ? `{ ${row.childCount} } ` : '{';
   }
   if (row.kind === Kind.Array) {
+    if (row.childCount === 0) return '[]';
     return row.collapsed ? `[ ${row.childCount} ]` : '[';
   }
   return row.preview;
